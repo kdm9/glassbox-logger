@@ -9,15 +9,15 @@
 #define PIN_DHT     2
 
 char LOG_FILENAME[] = "temp.tsv";
-#define DELAY_SECS  300
+#define DELAY_SECS  60
 
-/* # DHT WIRING
+/* WIRING
+# DHT
 Connect pin 1 (on the left) of the sensor to +5V (or 3v3 if logic is 3v3)
 Connect pin 2 of the sensor to PIN_DHT
 Connect pin 4 (on the right) of the sensor to GROUND
-*/
 
-/* # SD card wiring
+# SD card
 For the etherten: Pin is pin4
 Otherwise, connect SCL, MISO, MOSI to common bus, and CS/SS to PIN_CS_SD
 */
