@@ -8,8 +8,8 @@
 #define PIN_CS_SD   4
 #define PIN_DHT     2
 
-const char LOG_FILENAME[] = "temp.tsv";
-#define DELAY_MILLISECS  5000
+char LOG_FILENAME[] = "temp.tsv";
+#define DELAY_SECS  300
 
 /* # DHT WIRING
 Connect pin 1 (on the left) of the sensor to +5V (or 3v3 if logic is 3v3)
@@ -79,5 +79,5 @@ void loop() {
     Serial.print(" (took ");
     Serial.print(millis() - start);
     Serial.println(" ms)");
-    delay(DELAY_MILLISECS - (millis() - start));
+    delay((DELAY_SECS * 1000) - (millis() - start));
 }
