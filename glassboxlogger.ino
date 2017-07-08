@@ -9,7 +9,7 @@
 #define PIN_DHT     2
 
 char LOG_FILENAME[] = "temp.tsv";
-#define DELAY_SECS  60
+#define DELAY_SECS  5
 
 /* WIRING
 # DHT
@@ -44,12 +44,13 @@ void setup() {
         log_file.println("humidity\ttemerature\ttime");
         log_file.close();
     }
+    Serial.println("humidity\ttemerature\ttime");
 }
 
 void loop() {
-    float start = millis();
+    uint32_t start = millis();
+    float secs = (float)start / 1000.0;
 
-    float secs = millis()/ 1000;
     File log_file = SD.open(LOG_FILENAME, FILE_WRITE);
     if (!log_file) {
         Serial.println("# error opening file");
@@ -67,17 +68,17 @@ void loop() {
     }
 
     log_file.print(h);
-    log_file.print("%\t");
+    log_file.print("\t");
     log_file.print(t);
-    log_file.print("C\t");
+    log_file.print("\t");
     log_file.println(secs);
     log_file.close();
 
+    Serial.print(h);
+    Serial.print("\t");
     Serial.print(t);
-    Serial.print("C at ");
-    Serial.print(secs);
-    Serial.print(" (took ");
-    Serial.print(millis() - start);
-    Serial.println(" ms)");
+    Serial.print("\t");
+    Serial.println(secs);
+
     delay((DELAY_SECS * 1000) - (millis() - start));
 }
