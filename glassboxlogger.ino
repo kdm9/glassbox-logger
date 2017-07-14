@@ -4,12 +4,14 @@
 
 #include <DHT.h>
 #include <SD.h>
+#include <LowPower.h>
 
 #define PIN_CS_SD   4
 #define PIN_DHT     2
+#define PIN_DHT2    3
 
-char LOG_FILENAME[] = "temp.tsv";
-#define DELAY_SECS  5
+char LOG_FILENAME[] = "temp2.tsv";
+#define DELAY_SECS  1
 
 /* WIRING
 # DHT
@@ -23,6 +25,7 @@ Otherwise, connect SCL, MISO, MOSI to common bus, and CS/SS to PIN_CS_SD
 */
 
 DHT dht(PIN_DHT, DHT22);
+DHT dht2(PIN_DHT2, DHT22);
 
 void setup() {
     Serial.begin(115200);
@@ -35,16 +38,17 @@ void setup() {
     }
     Serial.println("done!");
     dht.begin();
+    dht2.begin();
     if (!SD.exists(LOG_FILENAME)) {
         File log_file = SD.open(LOG_FILENAME, FILE_WRITE);
         if (!log_file) {
             Serial.println("# error opening file");
             while(1);
         }
-        log_file.println("humidity\ttemerature\ttime");
+        log_file.println("humidity_1\ttemerature_1\thumidity_2\ttemerature_2\ttime");
         log_file.close();
     }
-    Serial.println("humidity\ttemerature\ttime");
+    Serial.println("humidity_1\ttemerature_1\thumidity_2\ttemerature_2\ttime");
 }
 
 void loop() {
@@ -61,15 +65,22 @@ void loop() {
     float h = dht.readHumidity();
     float t = dht.readTemperature();
 
+    float h2 = dht2.readHumidity();
+    float t2 = dht2.readTemperature();
+
     // Check if any reads failed and exit early (to try again).
     if (isnan(h) || isnan(t)) {
-        log_file.println("NA\tNA");
+        log_file.println("NA\tNA\tNA\tNA\tNA");
         return;
     }
 
     log_file.print(h);
     log_file.print("\t");
     log_file.print(t);
+    log_file.print("\t");
+    log_file.print(h2);
+    log_file.print("\t");
+    log_file.print(t2);
     log_file.print("\t");
     log_file.println(secs);
     log_file.close();
@@ -78,7 +89,12 @@ void loop() {
     Serial.print("\t");
     Serial.print(t);
     Serial.print("\t");
+    Serial.print(h2);
+    Serial.print("\t");
+    Serial.print(t2);
+    Serial.print("\t");
     Serial.println(secs);
 
-    delay((DELAY_SECS * 1000) - (millis() - start));
+    //delay((DELAY_SECS * 1000) - (millis() - start));
+    LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);
 }
