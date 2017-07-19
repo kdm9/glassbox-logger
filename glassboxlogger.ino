@@ -9,16 +9,16 @@
 
 
 // Uncomment the following during final/non-debugging builds
-// #define GLB_PRODUCTION
+#define GLB_PRODUCTION
 
+#define PIN_DHT     2
+#define PIN_DHT2    3
+#define PIN_CS_SD   4
 #define PIN_PWR     9
-#define PIN_DHT     8
-#define PIN_DHT2    7
-#define PIN_CS_SD   6
 #define PIN_LED     13
 
-#define LOG_FILENAME "temp2.tsv"
-#define DELAY_SECS  5
+#define LOG_FILENAME "temp.tsv"
+#define DELAY_SECS  30
 #define RTC_CLASS RTC_DS1307
 
 /* WIRING
@@ -38,18 +38,19 @@ DHT dht(PIN_DHT, DHT22);
 DHT dht2(PIN_DHT2, DHT22);
 
 void startBlink();
-String iso8601(const DateTime &t);
+void iso8601(char *buf, const DateTime &t);
 
 void setup() {
     #ifndef GLB_PRODUCTION
-    Serial.begin(115200);
+    Serial.begin(9600);
     Serial.print("#Initializing... ");
     #endif
 
     pinMode(PIN_CS_SD, OUTPUT);
     pinMode(PIN_PWR, OUTPUT);
+    pinMode(PIN_LED, OUTPUT);
 
-    startBlink();
+    digitalWrite(PIN_LED, HIGH);
     digitalWrite(PIN_PWR, HIGH);
 
 
@@ -59,8 +60,21 @@ void setup() {
         #endif
         while(1);
     }
+
+    if (!rtc.begin()) {
+        #ifndef GLB_PRODUCTION
+        Serial.println("Couldn't find RTC");
+        #endif
+        while (1);
+    }
+    if (! rtc.isrunning()) {
+        // Set clock if unset
+        rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
+
     dht.begin();
     dht2.begin();
+
     if (!SD.exists(LOG_FILENAME)) {
         File log_file = SD.open(LOG_FILENAME, FILE_WRITE);
         if (!log_file) {
@@ -69,13 +83,16 @@ void setup() {
             #endif
             while(1);
         }
-        log_file.println("humidity_1\ttemerature_1\thumidity_2\ttemerature_2\ttime");
+        log_file.println("time\thumidity_1\ttemerature_1\thumidity_2\ttemerature_2");
         log_file.close();
     }
+
     #ifndef GLB_PRODUCTION
     Serial.println("done!");
     Serial.println("time\thumidity_1\ttemerature_1\thumidity_2\ttemerature_2");
     #endif
+
+    digitalWrite(PIN_LED, LOW);
     digitalWrite(PIN_PWR, LOW);
 }
 
@@ -83,10 +100,12 @@ void loop() {
     uint32_t start = millis();
     float secs = (float)start / 1000.0;
     digitalWrite(PIN_PWR, HIGH);
-    delay(2); // Wait for pwr on
+    delay(10); // Wait for pwr on
 
     DateTime now = rtc.now();
-    String ts = iso8601(now);
+    char ts[25] = "";
+    iso8601(ts, now);
+
 
     File log_file = SD.open(LOG_FILENAME, FILE_WRITE);
     if (!log_file) {
@@ -154,9 +173,7 @@ void pwrDown()
 {
 }
 
-String iso8601(const DateTime &t)
+void iso8601(char *buffer, const DateTime &t)
 {
-    char buffer[20];
-    sprintf(buffer, "%04d-%02d-%02d_%02d:%02d:%02d", t.year(), t.month(), t.day(), t.hour(), t.minute(), t.second());
-    return String(buffer);
+    sprintf(buffer, "%04u-%02u-%02u_%02u:%02u:%02u", t.year(), t.month(), t.day(), t.hour(), t.minute(), t.second());
 }
