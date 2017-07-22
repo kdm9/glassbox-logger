@@ -83,13 +83,13 @@ void setup() {
             #endif
             while(1);
         }
-        log_file.println("time\thumidity_1\ttemerature_1\thumidity_2\ttemerature_2");
+        log_file.println("time\thumidity_1\ttemperature_1\thumidity_2\ttemperature_2");
         log_file.close();
     }
 
     #ifndef GLB_PRODUCTION
     Serial.println("done!");
-    Serial.println("time\thumidity_1\ttemerature_1\thumidity_2\ttemerature_2");
+    Serial.println("time\thumidity_1\ttemperature_1\thumidity_2\ttemperature_2");
     #endif
 
     digitalWrite(PIN_LED, LOW);
