@@ -7,21 +7,21 @@
 #include <SdFat.h>
 #include <LowPower.h>
 #include <RTClib.h>
+#include <avr/wdt.h>
 
 
 // Uncomment the following during final/non-debugging builds
-#define GBL_PRODUCTION
+//#define GBL_PRODUCTION
 
 #define PIN_PWR     9
-#define PIN_DHT     5
-#define PIN_DHT2    3
+#define PIN_DHT     3
+#define PIN_DHT2    5
 #define PIN_CS_SD   4
 #define PIN_LED     13
 #define PIN_VBAT    A0
 #define Vcc         3.3
 
-#define LOG_FILENAME "temp.tsv"
-#define DELAY_SECS  60
+#define DELAY_SECS  12
 #define RTC_MODEL 3231
 
 /* WIRING
@@ -45,23 +45,28 @@ RTC_DS1307 rtc;
 #error "RTC must be one of DS3231 or DS1307"
 #endif
 
-DHT dht(PIN_DHT, DHT22);
-DHT dht2(PIN_DHT2, DHT22);
+DHT dht(PIN_DHT, DHT22, 12);
+DHT dht2(PIN_DHT2, DHT22, 12);
+static volatile int failures = 0;
 
 void iso8601(char *buf, const DateTime &t);
 void mkfilename(char *buf, const DateTime &t);
 void pwrDown();
-void pwrUp();
-void deepSleep();
+bool pwrUp();
+void deepSleep(int);
 void setupRTC();
 float readVbat();
+// Reset by calling a null function pointer
+void (*reset) (void) = NULL;
 
 
 void setup() {
     Serial.begin(9600);
     #ifndef GBL_PRODUCTION
-    Serial.print("#Initializing... ");
+    Serial.println("# Initializing... ");
     #endif
+
+    failures = 0;
 
     pinMode(10, OUTPUT); // SS pin must be kept high
     pinMode(PIN_CS_SD, OUTPUT);
@@ -70,24 +75,45 @@ void setup() {
     digitalWrite(PIN_PWR, HIGH);
     delay(20);
 
-    setupRTC();
+    if (!pwrUp()) {
+        Serial.println("# Initializing failed");
+        deepSleep(1);
+    }
+
+    #if RTC_MODEL == 1307
+    if (!rtc.isrunning()) {
+    #elif RTC_MODEL == 3231
+    if (rtc.lostPower()) {
+    #endif
+        #ifndef GBL_PRODUCTION
+        Serial.println("Couldn't find RTC");
+        #endif
+        // Set clock if unset
+        rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
 
     #ifndef GBL_PRODUCTION
-    Serial.println("done!");
+    Serial.println("# Initializing success");
     Serial.println("time\thumidity_1\ttemperature_1\thumidity_2\ttemperature_2\tvbat");
     Serial.flush();
     #endif
+
+    pwrDown();
 }
 
 void loop() {
-    pwrUp();
+    deepSleep(DELAY_SECS);
+    if (!pwrUp()) {
+        pwrDown();
+        return;
+    }
 
     DateTime now = rtc.now();
     char ts[25] = "";
     iso8601(ts, now);
 
-    char filename[32] = "";
-    mkfilename(filename, now);
+    char filename[32] = "glb.tsv";
+    //mkfilename(filename, now);
 
     SdFile log_file;
     if (!log_file.open(filename, FILE_WRITE)) {
@@ -137,7 +163,6 @@ void loop() {
 
     // Power off
     pwrDown();
-    deepSleep();
 }
 
 float readVbat()
@@ -145,10 +170,9 @@ float readVbat()
     return analogRead(PIN_VBAT) * (Vcc / 1024.0) * 2;
 }
 
-void deepSleep()
+void deepSleep(int to_sleep)
 {
     // To be replaced with RTC interrupt and SLEEP_FOREVER
-    int to_sleep = DELAY_SECS;
     while (to_sleep >= 8) {
         LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
         to_sleep -= 8;
@@ -161,28 +185,53 @@ void deepSleep()
 
 void pwrDown()
 {
-    digitalWrite(PIN_PWR, LOW);
     #ifndef GBL_PRODUCTION
     Serial.flush();
     Serial.end();
     #endif
+    digitalWrite(PIN_PWR, LOW);
 }
 
-void pwrUp()
+bool pwrUp()
 {
     Serial.begin(9600);
     digitalWrite(PIN_PWR, HIGH);
-    delay(50); // Wait for pwr on
-    while(!sd.begin(PIN_CS_SD, SPI_HALF_SPEED)) {
-        Serial.println("Card init failed");
-        delay(1000);
+    delay(10); // Wait for pwr on
+
+    if (failures >= 10) {
+        reset();
     }
+
+    if (!sd.begin(PIN_CS_SD, SPI_HALF_SPEED)) {
+        #ifndef GBL_PRODUCTION
+        Serial.println("Card init failed");
+        #endif
+        failures++;
+        return false;
+    }
+
+    if (!rtc.begin()) {
+        #ifndef GBL_PRODUCTION
+        Serial.println("Couldn't find RTC");
+        #endif
+        failures++;
+        return false;
+    }
+
+    // Reset if the RTC isn't running
+    #if RTC_MODEL == 1307
+    bool needs_setting = !rtc.isrunning();
+    #elif RTC_MODEL == 3231
+    bool needs_setting = rtc.lostPower();
+    #endif
+    if (needs_setting) reset();
 
     dht.begin();
     dht2.begin();
 
     // Allow systems to stabilise before starting measurements
-    delay(500);
+    delay(1000);
+    return true;
 }
 
 void iso8601(char *buffer, const DateTime &t)
@@ -196,28 +245,4 @@ void mkfilename(char *buffer, const DateTime &t)
 {
     int len = sprintf(buffer, "%04u-%02u-%02u.tsv", t.year(), t.month(), t.day());
     buffer[len] = 0;
-}
-
-void setupRTC()
-{
-    while (!rtc.begin()) {
-        #ifndef GBL_PRODUCTION
-        Serial.println("Couldn't find RTC");
-        #endif
-        delay(1000);
-    }
-    #if RTC_MODEL == 1307
-    bool needs_setting = !rtc.isrunning();
-    #elif RTC_MODEL == 3231
-    bool needs_setting = rtc.lostPower();
-    #endif
-    if (needs_setting) {
-        #ifndef GBL_PRODUCTION
-        Serial.println("Couldn't find RTC");
-        #endif
-        // Set clock if unset
-        rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-    }
-
-
 }
