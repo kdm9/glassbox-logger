@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//#define DHT_DEBUG
 #include <DHT.h>
 #include <SdFat.h>
 #include <LowPower.h>
@@ -21,8 +20,9 @@
 #define PIN_VBAT    A0
 #define Vcc         3.3
 
-#define DELAY_SECS  12
-#define RTC_MODEL 3231
+#define DELAY_SECS  60
+#define RTC_MODEL   3231
+#define DHT_DELAY   3
 
 /* WIRING
 # DHT
@@ -45,8 +45,8 @@ RTC_DS1307 rtc;
 #error "RTC must be one of DS3231 or DS1307"
 #endif
 
-DHT dht(PIN_DHT, DHT22, 12);
-DHT dht2(PIN_DHT2, DHT22, 12);
+DHT dht(PIN_DHT, DHT22, DHT_DELAY);
+DHT dht2(PIN_DHT2, DHT22, DHT_DELAY);
 static volatile int failures = 0;
 
 void iso8601(char *buf, const DateTime &t);
@@ -54,7 +54,6 @@ void mkfilename(char *buf, const DateTime &t);
 void pwrDown();
 bool pwrUp();
 void deepSleep(int);
-void setupRTC();
 float readVbat();
 // Reset by calling a null function pointer
 void (*reset) (void) = NULL;
@@ -74,6 +73,9 @@ void setup() {
 
     digitalWrite(PIN_PWR, HIGH);
     delay(20);
+
+    dht.begin();
+    dht2.begin();
 
     if (!pwrUp()) {
         Serial.println("# Initializing failed");
@@ -226,11 +228,9 @@ bool pwrUp()
     #endif
     if (needs_setting) reset();
 
-    dht.begin();
-    dht2.begin();
 
     // Allow systems to stabilise before starting measurements
-    delay(1000);
+    delay(100);
     return true;
 }
 
